@@ -7596,7 +7596,7 @@ static int peer_timers_set_vty(struct vty *vty, const char *ip_str,
 	keepalive = strtoul(keep_str, NULL, 10);
 	holdtime = strtoul(hold_str, NULL, 10);
 
-	ret = peer_timers_set(peer, keepalive, holdtime);
+	ret = peer_timers_set(peer, keepalive, holdtime, PEER_FLAG_TIMER);
 
 	return bgp_vty_return(vty, ret);
 }
@@ -7610,7 +7610,7 @@ static int peer_timers_unset_vty(struct vty *vty, const char *ip_str)
 	if (!peer)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	ret = peer_timers_unset(peer);
+	ret = peer_timers_unset(peer, PEER_FLAG_TIMER);
 
 	return bgp_vty_return(vty, ret);
 }
@@ -7660,7 +7660,7 @@ static int peer_timers_connect_set_vty(struct vty *vty, const char *ip_str,
 
 	connect = strtoul(time_str, NULL, 10);
 
-	ret = peer_timers_connect_set(peer, connect);
+	ret = peer_timers_set(peer, connect, 0, PEER_FLAG_TIMER_CONNECT);
 
 	return bgp_vty_return(vty, ret);
 }
@@ -7674,7 +7674,7 @@ static int peer_timers_connect_unset_vty(struct vty *vty, const char *ip_str)
 	if (!peer)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	ret = peer_timers_connect_unset(peer);
+	ret = peer_timers_unset(peer, PEER_FLAG_TIMER_CONNECT);
 
 	return bgp_vty_return(vty, ret);
 }
@@ -7724,10 +7724,11 @@ DEFPY (neighbor_timers_delayopen,
 		return CMD_WARNING_CONFIG_FAILED;
 
 	if (!interval) {
-		if (peer_timers_delayopen_unset(peer))
+		if (peer_timers_unset(peer, PEER_FLAG_TIMER_DELAYOPEN))
 			return CMD_WARNING_CONFIG_FAILED;
 	} else {
-		if (peer_timers_delayopen_set(peer, interval))
+		if (peer_timers_set(peer, interval, 0,
+					PEER_FLAG_TIMER_DELAYOPEN))
 			return CMD_WARNING_CONFIG_FAILED;
 	}
 
@@ -7750,7 +7751,7 @@ DEFPY (no_neighbor_timers_delayopen,
 	if (!peer)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	if (peer_timers_delayopen_unset(peer))
+	if (peer_timers_unset(peer, PEER_FLAG_TIMER_DELAYOPEN))
 		return CMD_WARNING_CONFIG_FAILED;
 
 	return CMD_SUCCESS;

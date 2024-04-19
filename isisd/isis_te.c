@@ -1332,6 +1332,37 @@ static int lsp_to_subnet_cb(const struct prefix *prefix, uint32_t metric,
 		}
 	}
 
+	/* Update SRv6 SID and locator if any */
+	if (subtlvs && subtlvs->srv6_end_sids.count != 0) {
+		struct isis_srv6_sid *psid;
+		struct ls_srv6_sid sr = {};
+
+		psid = (struct isis_srv6_sid *)subtlvs->prefix_sids.head;
+		sr.behavior = psid->behavior;
+		sr.flags = psid->flags;
+		memcpy(&sr.sid, &psid->sid, sizeof(struct in6_addr));
+
+		if (!CHECK_FLAG(ls_pref->flags, LS_PREF_SRV6) ||
+		    !memcmp(&ls_pref->srv6, &sr, sizeof(struct ls_srv6_sid))) {
+			memcpy(&ls_pref->srv6, &sr, sizeof(struct ls_srv6_sid));
+			SET_FLAG(ls_pref->flags, LS_PREF_SRV6);
+			if (subnet->status != NEW)
+				subnet->status = UPDATE;
+		} else {
+			if (subnet->status == ORPHAN)
+				subnet->status = SYNC;
+		}
+	} else {
+		if (CHECK_FLAG(ls_pref->flags, LS_PREF_SRV6)) {
+			UNSET_FLAG(ls_pref->flags, LS_PREF_SRV6);
+			if (subnet->status != NEW)
+				subnet->status = UPDATE;
+		} else {
+			if (subnet->status == ORPHAN)
+				subnet->status = SYNC;
+		}
+	}
+
 	/* Update status and Export Link State Edge if needed */
 	if (subnet->status != SYNC) {
 		if (args->export)

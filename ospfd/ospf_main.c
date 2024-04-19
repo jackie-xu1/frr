@@ -72,11 +72,10 @@ struct zebra_privs_t ospfd_privs = {
 	.cap_num_i = 0};
 
 /* OSPFd options. */
-const struct option longopts[] = {
-	{"instance", required_argument, NULL, 'n'},
-	{"apiserver", no_argument, NULL, 'a'},
-	{0}
-};
+const struct option longopts[] = { { "instance", required_argument, NULL, 'n' },
+				   { "apiserver", no_argument, NULL, 'a' },
+				   { "localapi", no_argument, NULL, 'l' },
+				   { 0 } };
 
 /* OSPFd program name */
 
@@ -85,6 +84,7 @@ struct event_loop *master;
 
 #ifdef SUPPORT_OSPF_API
 extern int ospf_apiserver_enable;
+extern int ospf_apiserver_local;
 #endif /* SUPPORT_OSPF_API */
 
 /* SIGHUP handler. */
@@ -196,12 +196,14 @@ int main(int argc, char **argv)
 #ifdef SUPPORT_OSPF_API
 	/* OSPF apiserver is disabled by default. */
 	ospf_apiserver_enable = 0;
+	ospf_apiserver_local = 0;
 #endif /* SUPPORT_OSPF_API */
 
 	frr_preinit(&ospfd_di, argc, argv);
-	frr_opt_add("n:a", longopts,
+	frr_opt_add("n:al", longopts,
 		    "  -n, --instance     Set the instance id\n"
-		    "  -a, --apiserver    Enable OSPF apiserver\n");
+		    "  -a, --apiserver    Enable OSPF apiserver\n"
+		    "  -l, --localapi     Localhost only for apiserver\n");
 
 	while (1) {
 		int opt;
@@ -222,6 +224,9 @@ int main(int argc, char **argv)
 #ifdef SUPPORT_OSPF_API
 		case 'a':
 			ospf_apiserver_enable = 1;
+			break;
+		case 'l':
+			ospf_apiserver_local = 1;
 			break;
 #endif /* SUPPORT_OSPF_API */
 		default:

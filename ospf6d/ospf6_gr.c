@@ -262,6 +262,22 @@ void ospf6_gr_restart_enter(struct ospf6 *ospf6,
 #define RTR_LSA_ADJ_FOUND 1
 #define RTR_LSA_ADJ_NOT_FOUND 2
 
+#define lsa_from_container(type, container) \
+	((struct type *)((char *)container->header + sizeof(struct ospf6_lsa_header)))
+
+#define lsdesc_start(lsdesc_type, lsa) \
+	((struct lsdesc_type *)((char *)lsa + sizeof(*lsa)))
+
+#define lsdesc_end(lsa_container) \
+	(lsa_container->header + ntohs(lsa_container->header->length))
+
+#define for_each_lsdesc(current, lsa_type, lsdesc_type, lsa_container)		\
+	for (									\
+		current = lsdesc_start(lsdesc_type, lsa_from_container(lsa_type, lsa_container)); \
+		current < (struct lsdesc_type *)lsdesc_end(lsa_container);	\
+		current++)
+
+
 /* Check if a Router-LSA exists and if it contains a given link. */
 static int ospf6_router_lsa_contains_adj(struct ospf6_area *area,
 					 in_addr_t adv_router,
@@ -273,23 +289,12 @@ static int ospf6_router_lsa_contains_adj(struct ospf6_area *area,
 
 	type = ntohs(OSPF6_LSTYPE_ROUTER);
 	for (ALL_LSDB_TYPED_ADVRTR(area->lsdb, type, adv_router, lsa)) {
-		struct ospf6_router_lsa *router_lsa;
-		char *start, *end, *current;
-
+		struct ospf6_router_lsdesc *lsdesc;
 		empty = false;
-		router_lsa = (struct ospf6_router_lsa
-				      *)((char *)lsa->header
-					 + sizeof(struct ospf6_lsa_header));
 
 		/* Iterate over all interfaces in the Router-LSA. */
-		start = (char *)router_lsa + sizeof(struct ospf6_router_lsa);
-		end = (char *)lsa->header + ntohs(lsa->header->length);
-		for (current = start;
-		     current + sizeof(struct ospf6_router_lsdesc) <= end;
-		     current += sizeof(struct ospf6_router_lsdesc)) {
-			struct ospf6_router_lsdesc *lsdesc;
+		for_each_lsdesc(lsdesc, ospf6_router_lsa, ospf6_router_lsdesc, lsa) {
 
-			lsdesc = (struct ospf6_router_lsdesc *)current;
 			if (lsdesc->type != OSPF6_ROUTER_LSDESC_POINTTOPOINT)
 				continue;
 
@@ -311,22 +316,11 @@ static bool ospf6_gr_check_router_lsa_consistency(struct ospf6 *ospf6,
 						  struct ospf6_lsa *lsa)
 {
 	if (lsa->header->adv_router == ospf6->router_id) {
-		struct ospf6_router_lsa *router_lsa;
-		char *start, *end, *current;
-
-		router_lsa = (struct ospf6_router_lsa
-				      *)((char *)lsa->header
-					 + sizeof(struct ospf6_lsa_header));
+		struct ospf6_router_lsdesc *lsdesc;
 
 		/* Iterate over all interfaces in the Router-LSA. */
-		start = (char *)router_lsa + sizeof(struct ospf6_router_lsa);
-		end = (char *)lsa->header + ntohs(lsa->header->length);
-		for (current = start;
-		     current + sizeof(struct ospf6_router_lsdesc) <= end;
-		     current += sizeof(struct ospf6_router_lsdesc)) {
-			struct ospf6_router_lsdesc *lsdesc;
+		for_each_lsdesc(lsdesc, ospf6_router_lsa, ospf6_router_lsdesc, lsa) {
 
-			lsdesc = (struct ospf6_router_lsdesc *)current;
 			if (lsdesc->type != OSPF6_ROUTER_LSDESC_POINTTOPOINT)
 				continue;
 
@@ -402,8 +396,6 @@ static bool ospf6_gr_check_adjs_lsa_transit(struct ospf6_area *area,
 	/* Check if we are the DR. */
 	if (neighbor_router_id == ospf6->router_id) {
 		struct ospf6_lsa *lsa;
-		char *start, *end, *current;
-		struct ospf6_network_lsa *network_lsa;
 		struct ospf6_network_lsdesc *lsdesc;
 
 		/* Lookup Network LSA corresponding to this interface. */
@@ -414,15 +406,7 @@ static bool ospf6_gr_check_adjs_lsa_transit(struct ospf6_area *area,
 			return false;
 
 		/* Iterate over all routers present in the network. */
-		network_lsa = (struct ospf6_network_lsa
-				       *)((char *)lsa->header
-					  + sizeof(struct ospf6_lsa_header));
-		start = (char *)network_lsa + sizeof(struct ospf6_network_lsa);
-		end = (char *)lsa->header + ntohs(lsa->header->length);
-		for (current = start;
-		     current + sizeof(struct ospf6_network_lsdesc) <= end;
-		     current += sizeof(struct ospf6_network_lsdesc)) {
-			lsdesc = (struct ospf6_network_lsdesc *)current;
+		for_each_lsdesc(lsdesc, ospf6_network_lsa, ospf6_network_lsdesc, lsa) {
 
 			/* Skip self in the pseudonode. */
 			if (lsdesc->router_id == ospf6->router_id)
@@ -452,25 +436,15 @@ static bool ospf6_gr_check_adjs_lsa_transit(struct ospf6_area *area,
 	return true;
 }
 
+
+
 static bool ospf6_gr_check_adjs_lsa(struct ospf6_area *area,
 				    struct ospf6_lsa *lsa)
 {
-	struct ospf6_router_lsa *router_lsa;
-	char *start, *end, *current;
-
-	router_lsa =
-		(struct ospf6_router_lsa *)((char *)lsa->header
-					    + sizeof(struct ospf6_lsa_header));
+	struct ospf6_router_lsdesc *lsdesc;
 
 	/* Iterate over all interfaces in the Router-LSA. */
-	start = (char *)router_lsa + sizeof(struct ospf6_router_lsa);
-	end = (char *)lsa->header + ntohs(lsa->header->length);
-	for (current = start;
-	     current + sizeof(struct ospf6_router_lsdesc) <= end;
-	     current += sizeof(struct ospf6_router_lsdesc)) {
-		struct ospf6_router_lsdesc *lsdesc;
-
-		lsdesc = (struct ospf6_router_lsdesc *)current;
+	for_each_lsdesc(lsdesc, ospf6_router_lsa, ospf6_router_lsdesc, lsa) {
 		switch (lsdesc->type) {
 		case OSPF6_ROUTER_LSDESC_POINTTOPOINT:
 			if (!ospf6_gr_check_adj_id(area,

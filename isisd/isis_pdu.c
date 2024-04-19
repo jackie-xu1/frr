@@ -2080,9 +2080,9 @@ static void send_hello_cb(struct event *thread)
 
 	if (circuit->circ_type == CIRCUIT_T_P2P) {
 		circuit->u.p2p.t_send_p2p_hello = NULL;
-		send_hello(circuit, 1);
+		send_hello(circuit, IS_LEVEL_1);
 		send_hello_sched(circuit, ISIS_LEVEL1,
-				 1000 * circuit->hello_interval[0]);
+				 1000 * circuit->hello_interval[ISIS_LEVEL1 - 1]);
 		return;
 	}
 
